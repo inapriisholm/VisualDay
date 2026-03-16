@@ -5,7 +5,7 @@ import { CHILD_EMOJIS } from '../constants/emojis';
 export function uid() { return Math.random().toString(36).slice(2, 8); }
 
 export function makeCard(picto) {
-  return { uid: uid(), id: picto.id, emoji: picto.emoji, label: picto.label, svg: picto.svg ?? null, done: false };
+  return { uid: uid(), id: picto.id, emoji: picto.emoji, label: picto.label, svg: picto.svg ?? null, imageUrl: picto.imageUrl ?? null, bwSymbolPath: picto.bwSymbolPath ?? null, done: false };
 }
 
 const INIT_WEEK = {

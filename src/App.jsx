@@ -17,6 +17,7 @@ import { uid, initWeek, makeCard, loadProfiles, saveProfiles, makeProfile } from
 import Icon from './components/Icon';
 import PictoCard from './components/PictoCard';
 import GrayscaleEmoji from './components/GrayscaleEmoji';
+import { BW_SYMBOLS } from './data/bwSymbols';
 import OnboardingScreen from './components/OnboardingScreen';
 import { PrintOverlay, RoutinePrintOverlay } from './components/PrintComponents';
 import {
@@ -717,10 +718,26 @@ Regler:
   const renderLibrary = () => {
     const presetIds = new Set(PRESET_LIBRARY.map(p => p.id));
     const myCards   = library.filter(p => !presetIds.has(p.id));
+    const q = libSearch.trim().toLowerCase();
+
+    // In grayscale mode: BW folder symbols are the primary library
+    const bwFiltered = q
+      ? BW_SYMBOLS.filter(s => s.label.toLowerCase().includes(q))
+      : BW_SYMBOLS;
+    const myFiltered = q
+      ? myCards.filter(p => p.label.toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)))
+      : myCards;
+
+    // Color mode: existing library
     const baseCards = libFilter === "mine" ? myCards : library;
-    const showCards = libSearch.trim()
-      ? baseCards.filter(p => { const q = libSearch.toLowerCase(); return p.label.toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)); })
+    const colorCards = q
+      ? baseCards.filter(p => p.label.toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)))
       : baseCards;
+
+    // What to show in the grid
+    const showCards = grayscale
+      ? (libFilter === "mine" ? myFiltered : bwFiltered)
+      : colorCards;
 
     return (
       <div style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
@@ -758,7 +775,7 @@ Regler:
 
           {/* Filter tabs */}
           <div style={{ display: "flex", background: "rgba(255,255,255,0.7)", borderRadius: 999, padding: 4, marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            {[["alle", `Alle (${library.length})`], ["mine", `Mine (${myCards.length})`]].map(([id, lbl]) => (
+            {[["alle", grayscale ? `Sort/hvid (${BW_SYMBOLS.length})` : `Alle (${library.length})`], ["mine", `Mine (${myCards.length})`]].map(([id, lbl]) => (
               <button key={id} onClick={() => setLibFilter(id)} style={{
                 flex: 1, padding: "10px 0", borderRadius: 999,
                 background: libFilter === id ? acc : "transparent",
@@ -891,18 +908,20 @@ Regler:
                             <Icon name="check" size={13} color="#FFFFFF" />
                           </div>
                         )}
-                        {/* Card content — handles sclera, svg, imageUrl, emoji in both modes */}
-                        {scleraLoading && grayscale
-                          ? <div style={{ width: 44, height: 44, borderRadius: 8, background: "rgba(255,255,255,0.25)", animation: "pulse 1.2s ease-in-out infinite" }} />
-                          : (scleraIcons[picto.id] || picto.sclera_url) && grayscale
-                            ? <img src={scleraIcons[picto.id] || picto.sclera_url} alt={picto.label} style={{ width: 50, height: 50, objectFit: "contain" }} />
-                            : picto.imageUrl
-                              ? <img src={picto.imageUrl} alt={picto.label} style={{ width: 60, height: 68, objectFit: "cover", borderRadius: 12, filter: grayscale ? "grayscale(1) contrast(1.1)" : "none" }} />
-                              : picto.svg
-                                ? <div style={{ lineHeight: 0, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }} dangerouslySetInnerHTML={{ __html: picto.svg.replace(/<svg/, `<svg width="56" height="56"`) }} />
-                                : grayscale
-                                  ? <GrayscaleEmoji emoji={picto.emoji} size={44} />
-                                  : <span style={{ fontSize: 36 }}>{picto.emoji}</span>
+                        {/* Card content — handles bwSymbolPath, sclera, svg, imageUrl, emoji in both modes */}
+                        {picto.bwSymbolPath && grayscale
+                          ? <img src={picto.bwSymbolPath} alt={picto.label} style={{ width: 60, height: 60, objectFit: "contain" }} />
+                          : scleraLoading && grayscale
+                            ? <div style={{ width: 44, height: 44, borderRadius: 8, background: "rgba(255,255,255,0.25)", animation: "pulse 1.2s ease-in-out infinite" }} />
+                            : (scleraIcons[picto.id] || picto.sclera_url) && grayscale
+                              ? <img src={scleraIcons[picto.id] || picto.sclera_url} alt={picto.label} style={{ width: 50, height: 50, objectFit: "contain" }} />
+                              : picto.imageUrl
+                                ? <img src={picto.imageUrl} alt={picto.label} style={{ width: 60, height: 68, objectFit: "cover", borderRadius: 12, filter: grayscale ? "grayscale(1) contrast(1.1)" : "none" }} />
+                                : picto.svg
+                                  ? <div style={{ lineHeight: 0, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }} dangerouslySetInnerHTML={{ __html: picto.svg.replace(/<svg/, `<svg width="56" height="56"`) }} />
+                                  : grayscale
+                                    ? <GrayscaleEmoji emoji={picto.emoji} size={44} />
+                                    : <span style={{ fontSize: 36 }}>{picto.emoji}</span>
                         }
                       </div>
                       {editMode && <>

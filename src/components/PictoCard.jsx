@@ -3,13 +3,14 @@ import Icon from './Icon';
 import GrayscaleEmoji from './GrayscaleEmoji';
 import { CARD_BG, CARD_BG_DONE, CARD_BG_GRAY } from '../constants/themes';
 
-export default function PictoCard({ card, small, dragging, grayscale, accent, scleraUrl, showLabel, onToggle, onRemove, onEdit, onDragStart, onDragEnd }) {
+export default function PictoCard({ card, small, dragging, grayscale, accent, scleraUrl, bwSymbolPath, showLabel, onToggle, onRemove, onEdit, onDragStart, onDragEnd }) {
   const ac = accent || "#5B21B6";
   const W = small ? 60 : 76;
   const H = small ? 66 : 84;
   const R = small ? 18 : 24;
   const emojiSz = small ? 26 : 34;
   const effectiveScleraUrl = grayscale ? (scleraUrl || card.sclera_url) : null;
+  const effectiveBwPath = grayscale ? (bwSymbolPath || card.bwSymbolPath) : null;
   const cardBg = card.done ? CARD_BG_DONE : (grayscale ? CARD_BG_GRAY : CARD_BG);
 
   return (
@@ -32,7 +33,9 @@ export default function PictoCard({ card, small, dragging, grayscale, accent, sc
         {!card.done && !grayscale && (
           <div style={{ position: "absolute", top: small ? 7 : 9, right: small ? 9 : 11, width: small ? 7 : 9, height: small ? 7 : 9, borderRadius: "50%", background: "rgba(255,255,255,0.65)", pointerEvents: "none" }} />
         )}
-        {effectiveScleraUrl
+        {effectiveBwPath
+          ? <img src={effectiveBwPath} alt={card.label} style={{ width: Math.round(H * 0.85), height: Math.round(H * 0.85), objectFit: "contain" }} />
+          : effectiveScleraUrl
           ? <img src={effectiveScleraUrl} alt={card.label} style={{ width: Math.round(H * 0.88), height: Math.round(H * 0.88), objectFit: "contain" }} />
           : card.imageUrl
             ? <img src={card.imageUrl} alt={card.label} style={{ width: Math.round(H * 0.88), height: Math.round(H * 0.88), objectFit: "cover", borderRadius: Math.round(R * 0.5), filter: card.done ? "grayscale(1) opacity(0.5)" : grayscale ? "grayscale(1) contrast(1.1)" : "none" }} />

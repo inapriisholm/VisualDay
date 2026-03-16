@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(cd \"C:/Users/Inapr/Downloads/plan-app/plan-app\" && npm install @tabler/icons-react)",
-      "Bash(cd \"C:/Users/Inapr/Downloads/plan-app/plan-app\" && npm uninstall @tabler/icons-react && npm install react-feather)"
+      "Bash(cd \"C:/Users/Inapr/Downloads/plan-app/plan-app\" && npm uninstall @tabler/icons-react && npm install react-feather)",
+      "Bash(powershell.exe -NoProfile -Command \"\n\\\\$src = 'C:\\\\\\\\Users\\\\\\\\Inapr\\\\\\\\Documents\\\\\\\\sort-hvid symboler'\n\\\\$dst = 'C:\\\\\\\\Users\\\\\\\\Inapr\\\\\\\\Downloads\\\\\\\\plan-app\\\\\\\\plan-app\\\\\\\\public\\\\\\\\bw-symbols'\nNew-Item -ItemType Directory -Force -Path \\\\$dst | Out-Null\nGet-ChildItem \\\\\"\\\\$src\\\\\\\\*.svg\\\\\" | ForEach-Object {\n    \\\\$newName = \\\\$_.Name -replace ' ', '_'\n    Copy-Item \\\\$_.FullName \\(Join-Path \\\\$dst \\\\$newName\\)\n}\n\\(Get-ChildItem \\\\$dst\\).Count\n\")",
+      "Bash(cmd.exe /c \"mkdir \\\\\"C:\\\\Users\\\\Inapr\\\\Downloads\\\\plan-app\\\\plan-app\\\\public\\\\bw-symbols\\\\\" 2>nul & for %f in \\(\\\\\"C:\\\\Users\\\\Inapr\\\\Documents\\\\sort-hvid symboler\\\\*.svg\\\\\"\\) do @echo %~nxf\")",
+      "Bash(cmd.exe /c \"dir /B \\\\\"C:\\\\Users\\\\Inapr\\\\Documents\\\\sort-hvid symboler\\\\*.svg\\\\\" 2>&1\")",
+      "Bash(cmd.exe /c \"dir \\\\\"C:\\\\Users\\\\Inapr\\\\Documents\\\\sort-hvid symboler\\\\\" /B\")"
     ]
   }
 }
