@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import Icon from './Icon';
+import { Calendar, CheckSquare, BookOpen, RefreshCw, Sliders, ArrowLeft, ArrowRight, Send } from 'react-feather';
 import { THEMES } from '../constants/themes';
 import { CHILD_EMOJIS } from '../constants/emojis';
 
 const TAB_GUIDE = [
-  { icon: "week",     label: "Uge",       desc: "Hele ugens overblik med alle dage" },
-  { icon: "day",      label: "Dag",       desc: "Detaljeret dagsplan med afkrydsning" },
-  { icon: "library",  label: "Bibliotek", desc: "Alle aktivitets-kort samlet" },
-  { icon: "routines", label: "Rutiner",   desc: "Morgen, eftermiddag & aften" },
-  { icon: "theme",    label: "Tema",      desc: "Farver, piktogrammer & print" },
+  { FeatherIcon: Calendar,    label: "Uge",       desc: "Hele ugens overblik med alle dage" },
+  { FeatherIcon: CheckSquare, label: "Dag",       desc: "Detaljeret dagsplan med afkrydsning" },
+  { FeatherIcon: BookOpen,    label: "Bibliotek", desc: "Alle aktivitets-kort samlet" },
+  { FeatherIcon: RefreshCw,   label: "Rutiner",   desc: "Morgen, eftermiddag & aften" },
+  { FeatherIcon: Sliders,     label: "Tema",      desc: "Farver, piktogrammer & print" },
 ];
 
 export default function OnboardingScreen({ onDone, isAddingChild = false }) {
@@ -157,7 +157,7 @@ export default function OnboardingScreen({ onDone, isAddingChild = false }) {
                 animation: `obSlide 0.4s ${i * 0.07}s both cubic-bezier(0.34,1.2,0.64,1)`,
               }}>
                 <div style={{ width: 42, height: 42, borderRadius: 14, background: grad, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 4px 12px ${acc}40` }}>
-                  <Icon name={item.icon} size={20} color="#FFFFFF" />
+                  <item.FeatherIcon size={20} color="#FFFFFF" strokeWidth={2.2} />
                 </div>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: "#1A0840" }}>{item.label}</div>
@@ -178,7 +178,7 @@ export default function OnboardingScreen({ onDone, isAddingChild = false }) {
             fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 15,
             color: acc, cursor: "pointer",
           }}>
-            ← Tilbage
+            <ArrowLeft size={16} strokeWidth={2.5} style={{ marginRight: 4 }} /> Tilbage
           </button>
         )}
         <button onClick={handleNext} style={{
@@ -190,7 +190,10 @@ export default function OnboardingScreen({ onDone, isAddingChild = false }) {
           transition: "transform 0.15s",
           letterSpacing: 0.2,
         }}>
-          {current.cta} {isLast ? "🚀" : "→"}
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            {current.cta}
+            {isLast ? <Send size={18} strokeWidth={2.5} /> : <ArrowRight size={18} strokeWidth={2.5} />}
+          </span>
         </button>
       </div>
     </div>

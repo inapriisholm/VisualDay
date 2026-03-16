@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/Inapr/Downloads/plan-app/plan-app\" && npm install @tabler/icons-react)",
+      "Bash(cd \"C:/Users/Inapr/Downloads/plan-app/plan-app\" && npm uninstall @tabler/icons-react && npm install react-feather)"
+    ]
+  }
+}

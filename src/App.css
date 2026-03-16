@@ -9,6 +9,11 @@
 
 html, body {
   transition: background 0.4s ease;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  /* Prevent content from going under device chrome */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 ::-webkit-scrollbar {
@@ -28,6 +33,26 @@ button:active {
 }
 .card-row:active {
   transform: scale(0.97) !important;
+}
+
+/* Tappable divs — same press feedback as buttons */
+.tappable {
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.tappable:active {
+  opacity: 0.75;
+  transform: scale(0.97);
+}
+
+/* Snap-scrolling strip (day selector) */
+.snap-strip {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.snap-strip > * {
+  scroll-snap-align: start;
 }
 
 .card-bounce {
@@ -95,6 +120,16 @@ button:active {
 @keyframes obPop {
   0%   { transform: scale(0.5) rotate(-10deg); opacity: 0; }
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes cardPop {
+  0%   { transform: scale(0.85) translateY(16px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 @keyframes obSlide {

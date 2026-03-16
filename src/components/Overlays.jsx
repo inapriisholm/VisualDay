@@ -507,7 +507,7 @@ export function TimerOverlay({ timerLeft, timerSecs, timerRunning, onStart, onPa
 }
 
 // ─── ROUTINE OVERLAY ─────────────────────────────────────────────────────────
-export function RoutineOverlay({ onApply, onClose, theme }) {
+export function RoutineOverlay({ onApply, onClose, theme, grayscale = false }) {
   const acc = theme.accent;
   const [selected, setSelected] = useState(null);
   const [selectedDays, setSelectedDays] = useState([]);
@@ -522,7 +522,7 @@ export function RoutineOverlay({ onApply, onClose, theme }) {
           <>
             <div style={{ fontSize: 20, fontWeight: 900, color: "#1A0840", fontFamily: "'Nunito', sans-serif", marginBottom: 4 }}>Rutineskabeloner</div>
             <div style={{ fontSize: 13, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", marginBottom: 20 }}>Vælg en færdig rutine og tilpas den til jeres hverdag</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, filter: grayscale ? "grayscale(1)" : "none" }}>
               {ROUTINE_TEMPLATES.map(r => (
                 <div key={r.id} onClick={() => setSelected(r.id)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", background: "#F8F4FF", borderRadius: 20, cursor: "pointer", border: "2px solid transparent", transition: "all 0.15s" }}>
                   <div style={{ width: 52, height: 52, borderRadius: 16, background: r.color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>{r.emoji}</div>
@@ -557,7 +557,7 @@ export function RoutineOverlay({ onApply, onClose, theme }) {
               ))}
             </div>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Aktiviteter i rutinen</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24, filter: grayscale ? "grayscale(1)" : "none" }}>
               {template.cards.map(c => (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "#F8F4FF", borderRadius: 14 }}>
                   <span style={{ fontSize: 22 }}>{c.emoji}</span>
@@ -565,8 +565,8 @@ export function RoutineOverlay({ onApply, onClose, theme }) {
                 </div>
               ))}
             </div>
-            <button onClick={() => { if (selectedDays.length > 0) { onApply(template, selectedDays); onClose(); } }} style={{ width: "100%", padding: "16px 0", background: selectedDays.length > 0 ? acc : "#D0CCC8", border: "none", borderRadius: 999, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 16, cursor: selectedDays.length > 0 ? "pointer" : "not-allowed", boxShadow: selectedDays.length > 0 ? `0 4px 16px ${acc}55` : "none", transition: "all 0.2s" }}>
-              {selectedDays.length === 0 ? "Vælg mindst én dag" : `Tilføj til ${selectedDays.length} dag${selectedDays.length !== 1 ? "e" : ""} →`}
+            <button onClick={() => { if (selectedDays.length > 0) onApply(template, selectedDays); onClose(); }} style={{ width: "100%", padding: "16px 0", background: acc, border: "none", borderRadius: 999, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 16, cursor: "pointer", boxShadow: `0 4px 16px ${acc}55`, transition: "all 0.2s" }}>
+              {selectedDays.length === 0 ? "Luk" : `Tilføj til ${selectedDays.length} dag${selectedDays.length !== 1 ? "e" : ""} →`}
             </button>
           </>
         )}

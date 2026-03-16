@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // Constants
@@ -16,6 +16,7 @@ import { uid, initWeek, makeCard, loadProfiles, saveProfiles, makeProfile } from
 // Components
 import Icon from './components/Icon';
 import PictoCard from './components/PictoCard';
+import GrayscaleEmoji from './components/GrayscaleEmoji';
 import OnboardingScreen from './components/OnboardingScreen';
 import { PrintOverlay, RoutinePrintOverlay } from './components/PrintComponents';
 import {
@@ -44,23 +45,59 @@ export default function App() {
   // Derived active profile
   const activeProfile = profiles && profiles.find(p => p.id === activeProfileId) || profiles?.[0] || null;
 
-  // Per-profile week — stored inside profile object
-  const week = activeProfile?.week || initWeek();
+  // Per-profile week — stored inside profile object, supports multiple weeks by offset
+  const [weekOffset, setWeekOffset] = useState(0);
+  const getWeeks = (p) => p?.weeks || (p?.week ? { 0: p.week } : { 0: initWeek() });
+  const week = getWeeks(activeProfile)[weekOffset] || initWeek();
   const setWeek = (updater) => {
     setProfiles(prev => {
-      const next = prev.map(p => p.id === activeProfile.id
-        ? { ...p, week: typeof updater === "function" ? updater(p.week) : updater }
-        : p);
+      const next = prev.map(p => {
+        if (p.id !== activeProfile.id) return p;
+        const currentWeeks = getWeeks(p);
+        const currentWeek = currentWeeks[weekOffset] || initWeek();
+        const newWeek = typeof updater === "function" ? updater(currentWeek) : updater;
+        return { ...p, weeks: { ...currentWeeks, [weekOffset]: newWeek } };
+      });
       saveProfiles(next);
       return next;
     });
   };
 
   const childName = activeProfile?.name || "";
-  const [library, setLibrary]     = useState(PRESET_LIBRARY);
+
+  // Per-profile: library, grayscale, showLabels
+  const library = activeProfile?.library || PRESET_LIBRARY;
+  const setLibrary = (updater) => {
+    setProfiles(prev => {
+      const next = prev.map(p => {
+        if (p.id !== activeProfile.id) return p;
+        const cur = p.library || PRESET_LIBRARY;
+        return { ...p, library: typeof updater === "function" ? updater(cur) : updater };
+      });
+      saveProfiles(next);
+      return next;
+    });
+  };
+
+  const grayscale = activeProfile?.grayscale ?? false;
+  const setGrayscale = (val) => {
+    setProfiles(prev => {
+      const next = prev.map(p => p.id !== activeProfile.id ? p : { ...p, grayscale: typeof val === "function" ? val(p.grayscale ?? false) : val });
+      saveProfiles(next);
+      return next;
+    });
+  };
+
+  const showLabels = activeProfile?.showLabels ?? true;
+  const setShowLabels = (val) => {
+    setProfiles(prev => {
+      const next = prev.map(p => p.id !== activeProfile.id ? p : { ...p, showLabels: typeof val === "function" ? val(p.showLabels ?? true) : val });
+      saveProfiles(next);
+      return next;
+    });
+  };
+
   const [themeId, setThemeId]     = useState(() => activeProfile?.themeId || "lyng");
-  const [grayscale, setGrayscale] = useState(false);
-  const [showLabels, setShowLabels]   = useState(true);
   const [showRoutines, setShowRoutines] = useState(false);
   const [showTimer, setShowTimer]       = useState(false);
   const [timerSecs, setTimerSecs]       = useState(300);
@@ -88,7 +125,11 @@ export default function App() {
   const [showPrint, setShowPrint] = useState(false);
   const [showRoutinePrint, setShowRoutinePrint] = useState(false);
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
+  const [deleteConfirmProfile, setDeleteConfirmProfile] = useState(null);
   const [scleraIcons, setScleraIcons] = useState({});
+  const [daySwipeStart, setDaySwipeStart] = useState(null);
+  const [weekSwipeStart, setWeekSwipeStart] = useState(null);
+  const fileInputRef = useRef(null);
   const [scleraLoading, setScleraLoading] = useState(false);
 
   const theme    = THEMES.find(t => t.id === themeId);
@@ -96,7 +137,19 @@ export default function App() {
   const grad     = theme.grad;
   const activeBg = theme.bg;
   const cardRow  = "rgba(255,255,255,0.75)";
-  const todayIdx = 2;
+  const todayIdx = [6, 0, 1, 2, 3, 4, 5][new Date().getDay()]; // JS: 0=søn → DAYS: 0=man
+
+  // Beregn mandagens dato for den viste uge, tilpas weekOffset
+  const weekDates = (() => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - todayIdx + weekOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  })();
 
   // ── Library operations ──
   const saveToLibrary = (picto, original) => {
@@ -194,6 +247,8 @@ export default function App() {
   const generateLibCard = async (query) => {
     setLibGenLoading(true);
     setLibGenResult(null);
+    const svgBg  = grayscale ? "#000000" : theme.bg;
+    const svgAcc = grayscale ? "#FFFFFF" : acc;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -209,9 +264,9 @@ Regler:
 - viewBox="0 0 100 100"
 - Maks 12 SVG-elementer (rect, circle, ellipse, path, polygon, line)
 - Tykke streger (stroke-width 4-7), stroke-linecap="round", stroke-linejoin="round"
-- Brug disse to farver: baggrundsfarve="${theme.bg}" og accentfarve="${acc}"
-- Baggrund: <rect width="100" height="100" fill="${theme.bg}"/>
-- Figuren tegnes med fill="${acc}" og evt. stroke="${acc}"
+- Brug disse to farver: baggrundsfarve="${svgBg}" og accentfarve="${svgAcc}"
+- Baggrund: <rect width="100" height="100" fill="${svgBg}"/>
+- Figuren tegnes med fill="${svgAcc}" og evt. stroke="${svgAcc}"
 - Genkendelig silhouet, ikke for detaljeret, barnlig og glad stil
 - Svar KUN med JSON (ingen markdown):
 {"label":"${query}","svg":"<svg viewBox=\\"0 0 100 100\\" xmlns=\\"http://www.w3.org/2000/svg\\">...</svg>"}`
@@ -240,9 +295,23 @@ Regler:
     setEditLabelCard(null);
   };
 
-  // Sync theme when active profile changes
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const name = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').substring(0, 30) || "Billede";
+      const newCard = { id: "img_" + Date.now(), label: name, emoji: "🖼️", imageUrl: ev.target.result };
+      setLibrary(prev => [newCard, ...prev]);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Sync per-profile UI state when active profile changes
   useEffect(() => {
     if (activeProfile?.themeId) setThemeId(activeProfile.themeId);
+    setWeekOffset(0);
   }, [activeProfile?.id]);
 
   // Save theme change back to profile
@@ -287,77 +356,161 @@ Regler:
     );
   }
 
+  // ── Delt profil-strip (vises øverst i alle views) ──────────────────────────
+  const profileStrip = profiles && profiles.length > 0 && (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+      {profiles.map(p => (
+        <button key={p.id} onClick={() => { setActiveProfileId(p.id); setWeekOffset(0); try { localStorage.setItem("ugeplan_active", p.id); } catch {} }} style={{
+          display: "flex", alignItems: "center", gap: 5,
+          background: p.id === activeProfile?.id ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.22)",
+          border: p.id === activeProfile?.id ? "none" : "1.5px solid rgba(255,255,255,0.35)",
+          borderRadius: 999, padding: "8px 14px 8px 9px",
+          minHeight: 36,
+          cursor: "pointer", transition: "all 0.2s cubic-bezier(0.34,1.2,0.64,1)",
+          boxShadow: p.id === activeProfile?.id ? "0 3px 10px rgba(0,0,0,0.15)" : "none",
+        }}>
+          <span style={{ fontSize: 16 }}>{p.avatar || "🦁"}</span>
+          <span style={{ fontSize: 12, fontWeight: 900, fontFamily: "'Nunito', sans-serif", color: p.id === activeProfile?.id ? acc : "#FFFFFF" }}>{p.name}</span>
+        </button>
+      ))}
+      <button onClick={() => setAddingChild(true)} style={{
+        display: "flex", alignItems: "center", gap: 4,
+        background: "rgba(255,255,255,0.12)", border: "1.5px dashed rgba(255,255,255,0.45)",
+        borderRadius: 999, padding: "8px 13px 8px 10px",
+        minHeight: 36,
+        cursor: "pointer", color: "#FFFFFF",
+        fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12,
+      }}>
+        <span style={{ fontSize: 14 }}>+</span> Tilføj
+      </button>
+    </div>
+  );
+
   // ══════════════════════════════════════════════════════════════════════════════
   // ── WEEK VIEW ─────────────────────────────────────────────────────────────
   // ══════════════════════════════════════════════════════════════════════════════
   const renderWeek = () => (
-    <div style={{ paddingBottom: 100 }}>
-      <div className="header-gradient" style={{ background: grad, padding: "24px 20px 20px", borderRadius: "0 0 28px 28px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", lineHeight: 1, letterSpacing: -0.5 }}>{childName ? `${childName}s Ugeplan` : "Ugeplan"}</div>
-            {editMode && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontFamily: "'Nunito', sans-serif", fontWeight: 600, marginTop: 2 }}>Træk kort for at flytte dem</div>}
-            {/* Profile pills */}
-            {profiles && profiles.length > 0 && (
-              <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                {profiles.map(p => (
-                  <button key={p.id} onClick={() => { setActiveProfileId(p.id); try { localStorage.setItem("ugeplan_active", p.id); } catch {} }} style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    background: p.id === activeProfile?.id ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.25)",
-                    border: "none", borderRadius: 999, padding: "5px 12px 5px 6px",
-                    cursor: "pointer", transition: "all 0.22s cubic-bezier(0.34,1.2,0.64,1)",
-                    boxShadow: p.id === activeProfile?.id ? "0 3px 10px rgba(0,0,0,0.15)" : "none",
-                    transform: p.id === activeProfile?.id ? "scale(1.05)" : "scale(1)",
-                  }}>
-                    <span style={{ fontSize: 18 }}>{p.avatar || "🦁"}</span>
-                    <span style={{ fontSize: 12, fontWeight: 900, fontFamily: "'Nunito', sans-serif", color: p.id === activeProfile?.id ? acc : "#FFFFFF" }}>{p.name}</span>
-                  </button>
-                ))}
-                <button onClick={() => setAddingChild(true)} style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32,
-                  background: "rgba(255,255,255,0.25)", border: "none", borderRadius: 999,
-                  cursor: "pointer", color: "#FFFFFF", fontSize: 20, fontWeight: 700,
-                  transition: "all 0.18s",
-                }} title="Tilføj barn">+</button>
-              </div>
-            )}
+    <div
+      style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}
+      onTouchStart={e => setWeekSwipeStart(e.touches[0].clientX)}
+      onTouchEnd={e => {
+        if (weekSwipeStart === null) return;
+        const dx = e.changedTouches[0].clientX - weekSwipeStart;
+        if (Math.abs(dx) > 60) { if (dx < 0) setWeekOffset(o => o + 1); else setWeekOffset(o => o - 1); }
+        setWeekSwipeStart(null);
+      }}
+    >
+      <div className="header-gradient" style={{ background: grad, padding: "20px 18px 16px", borderRadius: "0 0 28px 28px" }}>
+
+        {/* ── Række 1: Titel + primær handling ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", lineHeight: 1, letterSpacing: -0.5 }}>
+            {childName ? `${childName}s Ugeplan` : "Ugeplan"}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setShowLabels(v => !v)} style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: "#FFFFFF", border: "none", borderRadius: 999, padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", opacity: showLabels ? 1 : 0.6 }} title={showLabels ? "Skjul tekst" : "Vis tekst"}>
-              <span style={{ fontSize: 15 }}>{showLabels ? "Aa" : "—"}</span>
-            </button>
-            <button onClick={() => setShowPrint(true)} style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: "#FFFFFF", border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}><Icon name="print" size={16} color="#FFFFFF" />Print</button>
-            <button onClick={() => setShowShare(true)} style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: "#FFFFFF", border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}><Icon name="share" size={16} color="#FFFFFF" />Del</button>
-            <button onClick={() => setEditMode(!editMode)} style={{ background: editMode ? "#FFFFFF" : "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: editMode ? acc : "#FFFFFF", border: "none", borderRadius: 999, padding: "9px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 13, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}><Icon name={editMode ? "check" : "edit"} size={16} color={editMode ? acc : "#FFFFFF"} />{editMode ? "Færdig" : "Rediger"}</button>
-          </div>
+          <button onClick={() => setEditMode(!editMode)} style={{
+            background: editMode ? "#FFFFFF" : "rgba(255,255,255,0.22)",
+            backdropFilter: "blur(8px)", color: editMode ? acc : "#FFFFFF",
+            border: "none", borderRadius: 999, padding: "10px 18px",
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 7,
+            fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 14,
+            boxShadow: editMode ? `0 4px 16px rgba(0,0,0,0.18)` : "0 2px 8px rgba(0,0,0,0.15)",
+            flexShrink: 0,
+          }}>
+            <Icon name={editMode ? "check" : "edit"} size={16} color={editMode ? acc : "#FFFFFF"} />
+            {editMode ? "Færdig" : "Rediger"}
+          </button>
         </div>
+
+        {/* ── Række 2: Sekundære handlinger ── */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button onClick={() => setShowLabels(v => !v)} style={{
+            flex: 1, background: showLabels ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.10)",
+            border: `1.5px solid ${showLabels ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}`,
+            color: "#FFFFFF", borderRadius: 12, padding: "9px 8px",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12,
+            opacity: showLabels ? 1 : 0.65,
+          }}>
+            <span style={{ fontSize: 13 }}>Aa</span> Label
+          </button>
+          <button onClick={() => setShowShare(true)} style={{
+            flex: 1, background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)",
+            color: "#FFFFFF", borderRadius: 12, padding: "9px 8px",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12,
+          }}>
+            <Icon name="share" size={15} color="#FFFFFF" /> Del plan
+          </button>
+          <button onClick={() => setShowPrint(true)} style={{
+            flex: 1, background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)",
+            color: "#FFFFFF", borderRadius: 12, padding: "9px 8px",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12,
+          }}>
+            <Icon name="print" size={15} color="#FFFFFF" /> Udskriv
+          </button>
+        </div>
+
+        {/* ── Række 3: Uge-navigation ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <button onClick={() => setWeekOffset(o => o - 1)} style={{
+            background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.3)",
+            borderRadius: 12, width: 44, height: 44, cursor: "pointer", color: "#FFFFFF",
+            fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>‹</button>
+          <div style={{ flex: 1, background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "8px 12px", textAlign: "center" }}>
+            <div style={{ fontSize: 13, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif" }}>
+              {weekOffset === 0 ? "Denne uge" : weekOffset === 1 ? "Næste uge" : weekOffset === -1 ? "Forrige uge" : weekOffset > 0 ? `Om ${weekOffset} uger` : `${Math.abs(weekOffset)} uger siden`}
+            </div>
+            {editMode && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontFamily: "'Nunito', sans-serif", fontWeight: 600, marginTop: 1 }}>Træk kort for at flytte dem</div>}
+          </div>
+          <button onClick={() => setWeekOffset(o => o + 1)} style={{
+            background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.3)",
+            borderRadius: 12, width: 44, height: 44, cursor: "pointer", color: "#FFFFFF",
+            fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>›</button>
+        </div>
+
+
       </div>
       <div style={{ background: activeBg, minHeight: 300, marginTop: -4 }}>
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }} onTouchStart={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}>
           <div style={{ display: "flex", minWidth: DAYS.length * 108 + 16, padding: "16px 8px 8px" }}>
             {DAYS.map((day, di) => {
               const cards = week[day.short] || [];
               const isToday = di === todayIdx;
+              const isDragOver = dragSrc !== null && dropTarget?.day === day.short;
               return (
-                <div key={day.short} onDragOver={e => onDragOver(e, day.short, cards.length)} onDrop={e => onDropCol(e, day.short)} style={{ flex: "0 0 100px", width: 100, background: isToday ? "rgba(255,255,255,0.65)" : "transparent", borderRadius: 24, padding: "0 4px 12px", boxShadow: isToday ? "0 8px 24px rgba(0,0,0,0.10)" : "none", border: "none", transition: "box-shadow 0.2s" }}>
-                  <div onClick={() => { setFocusDay(day.short); setTab("day"); }} style={{ textAlign: "center", padding: "10px 4px 10px", cursor: "pointer" }}>
+                <div key={day.short} onDragOver={e => onDragOver(e, day.short, cards.length)} onDrop={e => onDropCol(e, day.short)} style={{
+                  flex: "0 0 100px", width: 100, borderRadius: 24, padding: "0 4px 12px",
+                  background: isDragOver ? `${acc}18` : isToday ? "rgba(255,255,255,0.65)" : "transparent",
+                  boxShadow: isDragOver ? `0 0 0 2px ${acc}, 0 8px 24px ${acc}20` : isToday ? "0 8px 24px rgba(0,0,0,0.10)" : "none",
+                  border: "none", transition: "background 0.15s, box-shadow 0.15s",
+                }}>
+                  <div className="tappable" onClick={() => { setFocusDay(day.short); setTab("day"); }} style={{ textAlign: "center", padding: "10px 4px 8px" }}>
                     <div style={{ fontSize: 11, fontWeight: 900, fontFamily: "'Nunito', sans-serif", color: isToday ? acc : "#6A5880", letterSpacing: 0.5, textTransform: "uppercase" }}>{day.short}</div>
-                    {isToday
-                      ? <div style={{ width: 20, height: 4, background: acc, borderRadius: 99, margin: "4px auto 0", boxShadow: `0 2px 6px ${acc}60` }} />
-                      : <div style={{ width: 6, height: 6, background: `${acc}30`, borderRadius: 99, margin: "4px auto 0" }} />
-                    }
+                    <div style={{
+                      width: 28, height: 28, borderRadius: "50%", margin: "4px auto 0",
+                      background: isToday ? acc : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, fontFamily: "'Nunito', sans-serif", color: isToday ? "#FFFFFF" : "#8A7A90" }}>
+                        {weekDates[di].getDate()}
+                      </span>
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
                     {cards.map((card, idx) => (
                       <div key={card.uid} onDragOver={e => { e.stopPropagation(); onDragOver(e, day.short, idx); }} onDrop={e => { e.stopPropagation(); onDrop(e, day.short, idx); }} style={{ position: "relative", width: "100%", display: "flex", justifyContent: "center" }}>
-                        {dropTarget?.day === day.short && dropTarget?.idx === idx && <div style={{ position: "absolute", top: -6, left: 4, right: 4, height: 4, background: acc, borderRadius: 99, zIndex: 5 }} />}
+                        {dropTarget?.day === day.short && dropTarget?.idx === idx && (
+                          <div style={{ position: "absolute", top: -7, left: 2, right: 2, height: 3, background: acc, borderRadius: 99, zIndex: 5, boxShadow: `0 0 6px ${acc}` }} />
+                        )}
                         <PictoCard card={card} small grayscale={grayscale} showLabel={showLabels} dragging={dragSrc?.day === day.short && dragSrc?.idx === idx} onDragStart={() => onDragStart(day.short, idx)} onDragEnd={onDragEnd} accent={acc} scleraUrl={scleraIcons[card.id]} onToggle={() => toggleDone(day.short, card.uid)} onRemove={editMode ? () => removeCard(day.short, card.uid) : null} />
                       </div>
                     ))}
                     <button onClick={() => setBankFor(day.short)} style={{ width: 64, height: cards.length === 0 ? 60 : 40, borderRadius: 18, background: cards.length === 0 ? `${acc}18` : "rgba(255,255,255,0.8)", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, transition: "all 0.18s cubic-bezier(0.34,1.4,0.64,1)", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
                       <Icon name="plus" size={cards.length === 0 ? 22 : 14} color={acc} />
-                      <span style={{ fontSize: 7, fontWeight: 900, color: acc, fontFamily: "'Nunito', sans-serif", lineHeight: 1 }}>Tilføj</span>
+                      {cards.length === 0 && <span style={{ fontSize: 10, fontWeight: 900, color: acc, fontFamily: "'Nunito', sans-serif", lineHeight: 1 }}>Tilføj</span>}
                     </button>
                   </div>
                 </div>
@@ -376,29 +529,66 @@ Regler:
     const day   = DAYS.find(d => d.short === focusDay);
     const cards = week[focusDay] || [];
     const done  = cards.filter(c => c.done).length;
+    const dayIdx = DAYS.findIndex(d => d.short === focusDay);
     return (
-      <div style={{ paddingBottom: 100 }}>
-        <div className="header-gradient" style={{ background: grad, padding: "18px 20px 20px", borderRadius: "0 0 28px 28px" }}>
-          {/* Day selector strip */}
-          <div style={{ display: "flex", gap: 5, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
+      <div
+        style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}
+        onTouchStart={e => setDaySwipeStart({ x: e.touches[0].clientX, y: e.touches[0].clientY })}
+        onTouchEnd={e => {
+          if (!daySwipeStart) return;
+          const dx = e.changedTouches[0].clientX - daySwipeStart.x;
+          const dy = Math.abs(e.changedTouches[0].clientY - daySwipeStart.y);
+          if (Math.abs(dx) > 60 && dy < 80) {
+            if (dx < 0 && dayIdx < DAYS.length - 1) setFocusDay(DAYS[dayIdx + 1].short);
+            else if (dx > 0 && dayIdx > 0) setFocusDay(DAYS[dayIdx - 1].short);
+          }
+          setDaySwipeStart(null);
+        }}
+      >
+        <div className="header-gradient" style={{ background: grad, padding: "16px 18px 18px", borderRadius: "0 0 28px 28px" }}>
+          {profileStrip}
+
+          {/* ── Funktionsknapper under profil-strip ── */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <button onClick={() => setShowPrint(true)} style={{
+              flex: 1, background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)",
+              color: "#FFFFFF", borderRadius: 12, padding: "9px 8px",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12,
+            }}>
+              <Icon name="print" size={15} color="#FFFFFF" /> Udskriv
+            </button>
+            <button onClick={() => setShowShare(true)} style={{
+              flex: 1, background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)",
+              color: "#FFFFFF", borderRadius: 12, padding: "9px 8px",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12,
+            }}>
+              <Icon name="share" size={15} color="#FFFFFF" /> Del plan
+            </button>
+          </div>
+
+          {/* ── Række 1: Dag-vælger strip ── */}
+          <div className="snap-strip" style={{ display: "flex", gap: 5, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
             {DAYS.map(d => {
               const dayCards = week[d.short] || [];
               const dayDone = dayCards.filter(c => c.done).length;
               const isActive = d.short === focusDay;
               return (
                 <button key={d.short} onClick={() => setFocusDay(d.short)} style={{
-                  flexShrink: 0, padding: "7px 12px",
-                  background: isActive ? "#FFFFFF" : "rgba(255,255,255,0.2)",
+                  flexShrink: 0, padding: "8px 13px",
+                  background: isActive ? "#FFFFFF" : "rgba(255,255,255,0.18)",
                   color: isActive ? acc : "#FFFFFF",
-                  borderRadius: 999, border: "none",
-                  cursor: "pointer", fontSize: 11, fontWeight: 900,
+                  borderRadius: 12, border: isActive ? "none" : "1.5px solid rgba(255,255,255,0.3)",
+                  cursor: "pointer", fontSize: 12, fontWeight: 900,
                   fontFamily: "'Nunito', sans-serif",
                   boxShadow: isActive ? "0 4px 12px rgba(0,0,0,0.15)" : "none",
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  minWidth: 44, minHeight: 44, justifyContent: "center",
                 }}>
                   <span>{d.short}</span>
                   {dayCards.length > 0 && (
-                    <span style={{ fontSize: 8, fontWeight: 700, opacity: isActive ? 0.7 : 0.6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, opacity: isActive ? 0.7 : 0.55 }}>
                       {dayDone}/{dayCards.length}
                     </span>
                   )}
@@ -406,20 +596,48 @@ Regler:
               );
             })}
           </div>
-          {/* Title row */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", letterSpacing: -0.5 }}>{day.full}</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setShowPrint(true)} style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: "#FFFFFF", border: "none", borderRadius: 999, padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}><Icon name="print" size={14} color="#FFFFFF" />Print</button>
-              <button onClick={() => setShowShare(true)} style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: "#FFFFFF", border: "none", borderRadius: 999, padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}><Icon name="share" size={14} color="#FFFFFF" />Del</button>
-              <button onClick={() => setEditMode(!editMode)} style={{ background: editMode ? "#FFFFFF" : "rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", color: editMode ? acc : "#FFFFFF", border: "none", borderRadius: 999, padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}><Icon name={editMode ? "check" : "edit"} size={14} color={editMode ? acc : "#FFFFFF"} />{editMode ? "Færdig" : "Rediger"}</button>
+
+          {/* ── Række 2: Dag-titel + primær handling ── */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {dayIdx > 0 && (
+                <button onClick={() => setFocusDay(DAYS[dayIdx - 1].short)} style={{
+                  background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 10,
+                  width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#FFFFFF", fontSize: 18, cursor: "pointer", flexShrink: 0,
+                }}>‹</button>
+              )}
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", letterSpacing: -0.5, lineHeight: 1 }}>{day.full} {day.emoji}</div>
+              </div>
+              {dayIdx < DAYS.length - 1 && (
+                <button onClick={() => setFocusDay(DAYS[dayIdx + 1].short)} style={{
+                  background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 10,
+                  width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#FFFFFF", fontSize: 18, cursor: "pointer", flexShrink: 0,
+                }}>›</button>
+              )}
             </div>
+            <button onClick={() => setEditMode(!editMode)} style={{
+              background: editMode ? "#FFFFFF" : "rgba(255,255,255,0.22)",
+              backdropFilter: "blur(8px)", color: editMode ? acc : "#FFFFFF",
+              border: "none", borderRadius: 999, padding: "10px 18px",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 7,
+              fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 14,
+              boxShadow: editMode ? "0 4px 16px rgba(0,0,0,0.18)" : "0 2px 8px rgba(0,0,0,0.15)",
+              flexShrink: 0,
+            }}>
+              <Icon name={editMode ? "check" : "edit"} size={16} color={editMode ? acc : "#FFFFFF"} />
+              {editMode ? "Færdig" : "Rediger"}
+            </button>
           </div>
-          {/* Progress bar */}
-          <div style={{ height: 10, background: "rgba(255,255,255,0.25)", borderRadius: 999, overflow: "hidden", marginTop: 2 }}>
-            <div className="progress-glow" style={{ height: "100%", background: "#FFFFFF", borderRadius: 999, width: `${cards.length ? done/cards.length*100 : 0}%`, transition: "width 0.6s cubic-bezier(0.34,1.1,0.64,1)" }} />
-          </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", fontFamily: "'Nunito', sans-serif", fontWeight: 700, marginTop: 5 }}>{done} af {cards.length} aktiviteter klaret</div>
+
+          {/* Hjælpetekst i redigeringstilstand */}
+          {editMode && (
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontFamily: "'Nunito', sans-serif", fontWeight: 600, marginTop: 8, textAlign: "center" }}>
+              Tryk på et kort for at fjerne det
+            </div>
+          )}
         </div>
         <div style={{ background: activeBg, padding: "20px 0 20px", minHeight: 200 }}>
           {cards.length === 0 && (
@@ -443,14 +661,19 @@ Regler:
                   className="card-row"
                   style={{
                     display: "flex", alignItems: "center", gap: 14,
-                    background: isFlashing ? `${acc}28` : card.done ? "rgba(255,255,255,0.35)" : cardRow,
+                    background: isDropTarget ? `${acc}12` : isFlashing ? `${acc}28` : card.done ? "rgba(255,255,255,0.35)" : cardRow,
                     borderRadius: 20, padding: "10px 14px",
-                    opacity: isDragging ? 0.3 : card.done ? 0.65 : 1,
-                    transform: isDropTarget ? "scale(1.02)" : "scale(1)",
-                    boxShadow: isDropTarget ? `0 0 0 2.5px ${acc}` : isFlashing ? `0 0 0 2.5px ${acc}80` : "none",
-                    transition: "opacity 0.15s, transform 0.12s, box-shadow 0.12s, background 0.25s",
-                    cursor: "grab",
+                    opacity: isDragging ? 0.4 : card.done ? 0.65 : 1,
+                    transform: isDropTarget ? "translateY(-2px) scale(1.01)" : isDragging ? "scale(0.97)" : "scale(1)",
+                    boxShadow: isDropTarget ? `0 4px 16px ${acc}30, 0 0 0 2px ${acc}` : isFlashing ? `0 0 0 2px ${acc}80` : "0 2px 6px rgba(0,0,0,0.05)",
+                    transition: "opacity 0.12s, transform 0.12s, box-shadow 0.12s, background 0.12s",
+                    cursor: isDragging ? "grabbing" : "grab",
+                    borderLeft: isDropTarget ? `3px solid ${acc}` : "3px solid transparent",
                   }}>
+                  {/* Drag handle */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0, opacity: 0.3, cursor: "grab", padding: "0 2px" }}>
+                    {[0,1,2].map(i => <div key={i} style={{ display: "flex", gap: 3 }}>{[0,1].map(j => <div key={j} style={{ width: 3, height: 3, borderRadius: "50%", background: "#1A0840" }} />)}</div>)}
+                  </div>
                   <PictoCard card={card} grayscale={grayscale} accent={acc} scleraUrl={scleraIcons[card.id]} onToggle={() => toggleDone(focusDay, card.uid)} onRemove={editMode ? () => removeCard(focusDay, card.uid) : null} dragging={isDragging} onDragStart={() => onDayDragStart(idx)} onDragEnd={onDayDragEnd} />
                   <span style={{ flex: 1, fontSize: 18, fontWeight: 800, color: card.done ? "#9A9090" : "#1A1410", fontFamily: "'Nunito', sans-serif", textDecoration: card.done ? "line-through" : "none", transition: "color 0.2s", letterSpacing: -0.2 }}>{card.label}</span>
                   {card.done && (
@@ -500,22 +723,36 @@ Regler:
       : baseCards;
 
     return (
-      <div style={{ paddingBottom: 100 }}>
+      <div style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
         <div className="header-gradient" style={{ background: grad, padding: "22px 20px 20px", borderRadius: "0 0 28px 28px" }}>
+          {profileStrip}
           <div style={{ fontSize: 24, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", lineHeight: 1, marginBottom: 2, letterSpacing: -0.5 }}>Bibliotek</div>
           <div style={{ fontSize: 13, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", fontWeight: 600 }}>{library.length} kort · {myCards.length} egne</div>
         </div>
 
         <div style={{ background: activeBg, padding: "16px 18px 24px" }}>
-          {/* Add symbol button */}
+          {/* Library actions: new card + upload image */}
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} />
           <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
             <button onClick={() => setEditingCard({ picto: { emoji: "⭐", label: "" }, isNew: true })} title="Lav eget kort" style={{
-              width: 54, height: 54, background: "#FFFFFF",
-              border: "none", borderRadius: 999, color: acc,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              height: 54, background: "#FFFFFF", border: "none", borderRadius: 16, color: acc,
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "0 18px",
               boxShadow: "0 4px 16px rgba(0,0,0,0.10)", flexShrink: 0,
+              fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 13,
             }}>
-              <Icon name="edit" size={20} color={acc} />
+              <Icon name="edit" size={18} color={acc} />
+              Tegn selv
+            </button>
+            <button onClick={() => fileInputRef.current?.click()} title="Upload billede" style={{
+              height: 54, background: "#FFFFFF", border: "none", borderRadius: 16, color: "#6A5A50",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "0 18px",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.10)", flexShrink: 0,
+              fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 13,
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6A5A50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+              </svg>
+              Upload billede
             </button>
           </div>
 
@@ -547,28 +784,42 @@ Regler:
             )}
           </div>
 
-          {/* Empty search — offer AI generation */}
+          {/* Empty search — offer AI generation + upload */}
           {libSearch && showCards.length === 0 && (
             <div style={{ textAlign: "center", padding: "24px 8px 16px", fontFamily: "'Nunito', sans-serif" }}>
               <div style={{ fontSize: 36, marginBottom: 8 }}>🔍</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: "#1A0840", marginBottom: 4 }}>Ingen kort for "{libSearch}"</div>
-              <div style={{ fontSize: 13, color: "#6A5A50", marginBottom: 20 }}>Vil du oprette et nyt kort?</div>
+              <div style={{ fontSize: 13, color: "#6A5A50", marginBottom: 20 }}>Opret et nyt kort automatisk eller upload et billede</div>
               {!libGenResult && (
-                <button onClick={() => generateLibCard(libSearch)} disabled={libGenLoading} style={{
-                  background: libGenLoading ? "#EEE" : acc,
-                  color: libGenLoading ? "#AAA" : "#FFF",
-                  border: "none", borderRadius: 999,
-                  padding: "13px 28px", fontSize: 14, fontWeight: 900,
-                  cursor: libGenLoading ? "default" : "pointer",
-                  display: "inline-flex", alignItems: "center", gap: 10,
-                  boxShadow: libGenLoading ? "none" : `0 4px 16px ${acc}50`,
-                  fontFamily: "'Nunito', sans-serif",
-                }}>
-                  {libGenLoading
-                    ? <><div style={{ width: 18, height: 18, borderRadius: "50%", border: "3px solid #CCC", borderTopColor: "#888", animation: "spin 0.8s linear infinite" }} /> Tegner ikon…</>
-                    : <><Icon name="ai" size={18} color="#FFF" /> Tegn "{libSearch}"</>
-                  }
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+                  <button onClick={() => generateLibCard(libSearch)} disabled={libGenLoading} style={{
+                    background: libGenLoading ? "#EEE" : acc,
+                    color: libGenLoading ? "#AAA" : "#FFF",
+                    border: "none", borderRadius: 999,
+                    padding: "14px 28px", fontSize: 14, fontWeight: 900,
+                    cursor: libGenLoading ? "default" : "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 10,
+                    boxShadow: libGenLoading ? "none" : `0 4px 16px ${acc}50`,
+                    fontFamily: "'Nunito', sans-serif", width: "100%", justifyContent: "center",
+                  }}>
+                    {libGenLoading
+                      ? <><div style={{ width: 18, height: 18, borderRadius: "50%", border: "3px solid #CCC", borderTopColor: "#888", animation: "spin 0.8s linear infinite" }} /> Tegner ikon…</>
+                      : <><Icon name="ai" size={18} color="#FFF" /> AI tegner "{libSearch}"</>
+                    }
+                  </button>
+                  <button onClick={() => fileInputRef.current?.click()} style={{
+                    background: "#FFFFFF", color: "#374151", border: "1.5px solid #E5E7EB",
+                    borderRadius: 999, padding: "13px 28px", fontSize: 14, fontWeight: 800,
+                    cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 10,
+                    fontFamily: "'Nunito', sans-serif", width: "100%", justifyContent: "center",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+                  }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+                    </svg>
+                    Upload dit eget billede
+                  </button>
+                </div>
               )}
               {libGenResult && (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
@@ -640,13 +891,19 @@ Regler:
                             <Icon name="check" size={13} color="#FFFFFF" />
                           </div>
                         )}
-                        {grayscale
-                          ? scleraLoading
-                            ? <div style={{ width: 42, height: 42, borderRadius: 8, background: "rgba(255,255,255,0.4)", animation: "pulse 1.2s ease-in-out infinite" }} />
-                            : (scleraIcons[picto.id] || picto.sclera_url)
-                              ? <img src={scleraIcons[picto.id] || picto.sclera_url} alt={picto.label} style={{ width: 42, height: 42, objectFit: "contain" }} />
-                              : <span style={{ fontSize: 34, filter: "grayscale(1) brightness(3)" }}>{picto.emoji}</span>
-                          : <span style={{ fontSize: 34 }}>{picto.emoji}</span>}
+                        {/* Card content — handles sclera, svg, imageUrl, emoji in both modes */}
+                        {scleraLoading && grayscale
+                          ? <div style={{ width: 44, height: 44, borderRadius: 8, background: "rgba(255,255,255,0.25)", animation: "pulse 1.2s ease-in-out infinite" }} />
+                          : (scleraIcons[picto.id] || picto.sclera_url) && grayscale
+                            ? <img src={scleraIcons[picto.id] || picto.sclera_url} alt={picto.label} style={{ width: 50, height: 50, objectFit: "contain" }} />
+                            : picto.imageUrl
+                              ? <img src={picto.imageUrl} alt={picto.label} style={{ width: 60, height: 68, objectFit: "cover", borderRadius: 12, filter: grayscale ? "grayscale(1) contrast(1.1)" : "none" }} />
+                              : picto.svg
+                                ? <div style={{ lineHeight: 0, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }} dangerouslySetInnerHTML={{ __html: picto.svg.replace(/<svg/, `<svg width="56" height="56"`) }} />
+                                : grayscale
+                                  ? <GrayscaleEmoji emoji={picto.emoji} size={44} />
+                                  : <span style={{ fontSize: 36 }}>{picto.emoji}</span>
+                        }
                       </div>
                       {editMode && <>
                         <button onClick={() => setEditingCard({ picto, isNew: false })} style={{ position: "absolute", top: -8, left: -8, width: 28, height: 28, borderRadius: "50%", background: "#4A18A0", border: "2px solid #FFFFFF", color: "#FFFFFF", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, zIndex: 10 }}><Icon name="edit" size={13} color="#FFFFFF" /></button>
@@ -661,7 +918,7 @@ Regler:
                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1A1410" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
                       </button>
                     </div>
-                    {isCustom && !isSelected && <span style={{ fontSize: 9, color: acc, fontFamily: "'Nunito', sans-serif", fontWeight: 700, background: `${acc}22`, borderRadius: 6, padding: "2px 6px" }}>Mit kort</span>}
+                    {isCustom && !isSelected && <span style={{ fontSize: 10, color: acc, fontFamily: "'Nunito', sans-serif", fontWeight: 700, background: `${acc}22`, borderRadius: 6, padding: "2px 6px" }}>Mit kort</span>}
                   </div>
                 );
               })}
@@ -681,7 +938,7 @@ Regler:
                         const pictos = showCards.filter(p => selectedCards.includes(p.id));
                         pictos.forEach(p => addCard(d.short, p));
                         setSelectedCards([]);
-                      }} style={{ padding: "6px 10px", borderRadius: 999, background: acc, border: "none", color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 11, cursor: "pointer", boxShadow: `0 2px 8px ${acc}40` }}>
+                      }} style={{ padding: "9px 14px", borderRadius: 999, background: acc, border: "none", color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 12, cursor: "pointer", boxShadow: `0 2px 8px ${acc}40`, minHeight: 36 }}>
                         {d.short}
                       </button>
                     ))}
@@ -704,6 +961,7 @@ Regler:
   const renderRoutines = () => (
     <div style={{ paddingBottom: 100 }}>
       <div className="header-gradient" style={{ background: grad, padding: "22px 20px 20px", borderRadius: "0 0 28px 28px" }}>
+        {profileStrip}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 24, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", letterSpacing: -0.5 }}>Rutiner</div>
@@ -715,24 +973,21 @@ Regler:
         </div>
       </div>
       <div style={{ background: activeBg, padding: "20px 18px 24px" }}>
-        {/* Routine templates */}
-        <div style={{ fontSize: 11, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Rutineskabeloner</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
-          {ROUTINE_TEMPLATES.map(r => (
-            <div key={r.id} onClick={() => setShowRoutines(true)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", background: "#FFFFFF", borderRadius: 20, cursor: "pointer", boxShadow: "0 3px 12px rgba(0,0,0,0.08)" }}>
-              <div style={{ width: 52, height: 52, borderRadius: 16, background: r.color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>{r.emoji}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 900, color: "#1A0840", fontFamily: "'Nunito', sans-serif" }}>{r.label}</div>
-                <div style={{ fontSize: 12, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", marginTop: 1 }}>{r.cards.length} aktiviteter · {r.desc}</div>
-              </div>
-              <span style={{ fontSize: 20, color: "#C0B8D0" }}>›</span>
-            </div>
-          ))}
+        {/* Rutiner — direkte adgang */}
+        <div className="tappable" onClick={() => setShowRoutines(true)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 3px 12px rgba(0,0,0,0.08)", marginBottom: 28 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 16, background: `${acc}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: 26 }}>🔄</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: "#1A0840", fontFamily: "'Nunito', sans-serif" }}>Rutineskabeloner</div>
+            <div style={{ fontSize: 12, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", marginTop: 1 }}>Morgen, eftermiddag og aften</div>
+          </div>
+          <span style={{ fontSize: 20, color: "#C0B8D0" }}>›</span>
         </div>
 
         {/* Timer */}
         <div style={{ fontSize: 11, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Time Timer</div>
-        <div onClick={() => setShowTimer(true)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", background: "#FFFFFF", borderRadius: 20, cursor: "pointer", boxShadow: "0 3px 12px rgba(0,0,0,0.08)" }}>
+        <div className="tappable" onClick={() => setShowTimer(true)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 3px 12px rgba(0,0,0,0.08)" }}>
           <div style={{ width: 56, height: 56, borderRadius: "50%", background: timerRunning ? acc + "22" : "#F0EBF8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
             <svg width="56" height="56" style={{ position: "absolute", transform: "rotate(-90deg)" }}>
               <circle cx="28" cy="28" r="22" fill="none" stroke="#E0D8F0" strokeWidth="4" />
@@ -756,7 +1011,7 @@ Regler:
 
         {/* Share */}
         <div style={{ fontSize: 11, color: "#6A5A50", fontFamily: "'Nunito', sans-serif", fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14, marginTop: 28 }}>Del med partner</div>
-        <div onClick={() => setShowShare(true)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", background: "#FFFFFF", borderRadius: 20, cursor: "pointer", boxShadow: "0 3px 12px rgba(0,0,0,0.08)" }}>
+        <div className="tappable" onClick={() => setShowShare(true)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 3px 12px rgba(0,0,0,0.08)" }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, background: "#F0EBF8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>👥</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 900, color: "#1A0840", fontFamily: "'Nunito', sans-serif" }}>Del ugeplanen</div>
@@ -774,6 +1029,7 @@ Regler:
   const renderTheme = () => (
     <div style={{ paddingBottom: 100 }}>
       <div className="header-gradient" style={{ background: grad, padding: "22px 20px 20px", borderRadius: "0 0 28px 28px" }}>
+        {profileStrip}
         <div style={{ fontSize: 24, fontWeight: 900, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", letterSpacing: -0.5 }}>Udseende</div>
         <div style={{ fontSize: 13, color: "#FFFFFF", fontFamily: "'Nunito', sans-serif", fontWeight: 600, marginTop: 2 }}>Tilpas til barnets tryghedszone</div>
       </div>
@@ -866,7 +1122,7 @@ Regler:
                         : <span style={{ fontSize: 26, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }}>{item.emoji}</span>
                       }
                     </div>
-                    <span style={{ fontSize: 9, fontWeight: 800, color: "#6A5A50", fontFamily: "'Nunito', sans-serif" }}>{item.label}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#6A5A50", fontFamily: "'Nunito', sans-serif" }}>{item.label}</span>
                   </div>
                 );
               })}
@@ -902,20 +1158,19 @@ Regler:
                   <div style={{ fontSize: 11, fontWeight: 800, color: acc, fontFamily: "'Nunito', sans-serif" }}>Aktiv ✓</div>
                 )}
                 {(profiles || []).length > 1 && (
-                  <button onClick={() => {
-                    if (!window.confirm(`Slet ${p.name}s ugeplan? Dette kan ikke fortrydes.`)) return;
-                    const next = profiles.filter(x => x.id !== p.id);
-                    setProfiles(next);
-                    saveProfiles(next);
-                    if (p.id === activeProfileId) {
-                      setActiveProfileId(next[0]?.id || null);
-                      try { localStorage.setItem("ugeplan_active", next[0]?.id || ""); } catch {}
-                    }
-                  }} style={{
+                  <button onClick={() => setDeleteConfirmProfile(p)} style={{
                     background: "#FFE4E4", color: "#DC2626", border: "none", borderRadius: 999,
                     width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center",
                     cursor: "pointer", fontSize: 14, flexShrink: 0,
-                  }} title="Slet">✕</button>
+                    transition: "transform 0.12s, box-shadow 0.12s",
+                    boxShadow: "0 2px 8px rgba(220,38,38,0.18)",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.15)"; e.currentTarget.style.background = "#DC2626"; e.currentTarget.style.color = "#FFF"; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "#FFE4E4"; e.currentTarget.style.color = "#DC2626"; }}
+                    title="Slet profil"
+                  >
+                    <Icon name="close" size={14} color="currentColor" />
+                  </button>
                 )}
               </div>
             ))}
@@ -941,7 +1196,7 @@ Regler:
   // ══════════════════════════════════════════════════════════════════════════════
   return (
     <div style={{ maxWidth: 430, margin: "0 auto", minHeight: "100dvh", background: activeBg }}>
-      <div style={{ overflowY: "auto", height: "calc(100dvh - 84px)" }}>
+      <div style={{ overflowY: "auto", height: "calc(100dvh - 84px - env(safe-area-inset-bottom, 0px))", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {tab === "week"     && renderWeek()}
         {tab === "day"      && renderDay()}
         {tab === "library"  && renderLibrary()}
@@ -950,7 +1205,7 @@ Regler:
       </div>
 
       {/* Tab bar — floating pill */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, zIndex: 200, padding: "0 12px 16px" }}>
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, zIndex: 200, padding: "0 12px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}>
         <div style={{ background: "rgba(255,255,255,0.88)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 999, padding: "6px 6px", display: "flex", alignItems: "center", justifyContent: "space-around", boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)" }}>
           {[
             { id: "week",     icon: "week",     label: "Uge" },
@@ -1008,7 +1263,7 @@ Regler:
         <RoutinePrintOverlay routines={ROUTINE_TEMPLATES} theme={theme} grayscale={grayscale} onClose={() => setShowRoutinePrint(false)} />
       )}
       {showRoutines && (
-        <RoutineOverlay theme={theme} onApply={(template, days) => {
+        <RoutineOverlay theme={theme} grayscale={grayscale} onApply={(template, days) => {
           days.forEach(day => { template.cards.forEach(c => addCard(day, { ...c, uid: undefined })); });
         }} onClose={() => setShowRoutines(false)} />
       )}
@@ -1054,6 +1309,93 @@ Regler:
       {showPrint && (
         <PrintOverlay week={week} theme={theme} grayscale={grayscale} focusDay={focusDay}
           scleraIcons={scleraIcons} onClose={() => setShowPrint(false)} />
+      )}
+
+      {/* Delete profile confirmation modal */}
+      {deleteConfirmProfile && (
+        <div
+          onClick={() => setDeleteConfirmProfile(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 2000,
+            background: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "0 24px",
+            animation: "fadeIn 0.18s ease",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#FFFFFF", borderRadius: 28,
+              padding: "28px 24px 20px",
+              width: "100%", maxWidth: 360,
+              boxShadow: "0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.12)",
+              animation: "cardPop 0.25s cubic-bezier(0.34,1.4,0.64,1)",
+              fontFamily: "'Nunito', sans-serif",
+            }}
+          >
+            {/* Icon */}
+            <div style={{
+              width: 56, height: 56, borderRadius: 20,
+              background: "#FEE2E2", display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: 18,
+            }}>
+              <Icon name="close" size={26} color="#DC2626" />
+            </div>
+
+            {/* Title */}
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#1A0840", marginBottom: 8, lineHeight: 1.2 }}>
+              Slet {deleteConfirmProfile.name}s profil?
+            </div>
+
+            {/* Body */}
+            <div style={{ fontSize: 14, color: "#6A5A70", fontWeight: 600, lineHeight: 1.5, marginBottom: 24 }}>
+              Al data for <strong>{deleteConfirmProfile.name}</strong> — ugeplan, bibliotek og rutiner — slettes permanent. Dette kan ikke fortrydes.
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setDeleteConfirmProfile(null)}
+                style={{
+                  flex: 1, padding: "13px", border: "none", borderRadius: 14,
+                  background: "#F3F4F6", color: "#374151",
+                  fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: 15,
+                  cursor: "pointer", transition: "background 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "#E5E7EB"}
+                onMouseLeave={e => e.currentTarget.style.background = "#F3F4F6"}
+              >
+                Annuller
+              </button>
+              <button
+                onClick={() => {
+                  const next = profiles.filter(x => x.id !== deleteConfirmProfile.id);
+                  setProfiles(next);
+                  saveProfiles(next);
+                  if (deleteConfirmProfile.id === activeProfileId) {
+                    setActiveProfileId(next[0]?.id || null);
+                    try { localStorage.setItem("ugeplan_active", next[0]?.id || ""); } catch {}
+                  }
+                  setDeleteConfirmProfile(null);
+                }}
+                style={{
+                  flex: 1, padding: "13px", border: "none", borderRadius: 14,
+                  background: "#DC2626", color: "#FFFFFF",
+                  fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 15,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(220,38,38,0.4)",
+                  transition: "background 0.15s, box-shadow 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#B91C1C"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(220,38,38,0.5)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#DC2626"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(220,38,38,0.4)"; }}
+              >
+                Slet profil
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

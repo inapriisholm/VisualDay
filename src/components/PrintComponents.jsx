@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
 import { CARD_BG } from '../constants/themes';
 import { DAYS } from '../constants/days';
@@ -268,38 +268,59 @@ export function PrintOverlay({ week, theme, grayscale, focusDay, scleraIcons, on
 }
 
 // ─── PRINT ROUTINE LAYOUT ─────────────────────────────────────────────────────
-export function PrintRoutineLayout({ routines, theme, grayscale, title }) {
+// Renders each routine as a cuttable strip — landscape (default) or portrait
+export function PrintRoutineLayout({ routines, theme, grayscale, title, landscape = true }) {
   const acc = theme.accent;
-  const bg = theme.bg;
+  const bg = grayscale ? "#FFFFFF" : theme.bg;
+  const CARD_W = landscape ? 72 : 62;
+  const CARD_H = landscape ? 80 : 70;
+
   return (
-    <div style={{ width: "210mm", minHeight: "297mm", background: "#FFFFFF", padding: "12mm 14mm", fontFamily: "'Nunito', sans-serif", boxSizing: "border-box" }}>
-      {title && <div style={{ fontSize: 22, fontWeight: 900, color: acc, marginBottom: 8, letterSpacing: -0.5 }}>{title}</div>}
-      {routines.map((r) => (
-        <div key={r.id} style={{ marginBottom: 14, pageBreakInside: "avoid", background: bg, borderRadius: 16, padding: "12px 14px 14px", border: `2.5px solid ${acc}40` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 12, background: acc + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{r.emoji}</div>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 900, color: "#1A0840", lineHeight: 1 }}>{r.label}</div>
-              <div style={{ fontSize: 11, color: "#6A5A50", marginTop: 2 }}>{r.cards.length} trin</div>
+    <div style={{ width: landscape ? "297mm" : "210mm", minHeight: landscape ? "210mm" : "297mm", background: "#FFFFFF", padding: "8mm 8mm 6mm", fontFamily: "'Nunito', sans-serif", boxSizing: "border-box" }}>
+      {title && (
+        <div style={{ fontSize: 18, fontWeight: 900, color: acc, marginBottom: "6mm", letterSpacing: -0.3, borderBottom: `2.5px solid ${acc}`, paddingBottom: "3mm" }}>{title}</div>
+      )}
+      {routines.map((r, ri) => (
+        <div key={r.id}>
+          {/* Strip */}
+          <div style={{ display: "flex", alignItems: "stretch", border: `2px solid ${grayscale ? "#333" : acc}`, borderRadius: 12, overflow: "hidden", pageBreakInside: "avoid", background: "#FFFFFF" }}>
+            {/* Left label */}
+            <div style={{ width: 52, flexShrink: 0, background: grayscale ? "#111" : acc, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "8px 4px" }}>
+              <span style={{ fontSize: 24 }}>{r.emoji}</span>
+              <span style={{ fontSize: 8, fontWeight: 900, color: "#FFFFFF", textAlign: "center", lineHeight: 1.2, wordBreak: "break-word", maxWidth: 46 }}>{r.label}</span>
+            </div>
+            {/* Steps */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 0, flex: 1, padding: "6px 6px" }}>
+              {r.cards.map((card, ci) => (
+                <div key={ci} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 5px", pageBreakInside: "avoid" }}>
+                  {/* Step number */}
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: grayscale ? "#333" : acc, color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900, flexShrink: 0 }}>{ci + 1}</div>
+                  {/* Card image */}
+                  <div style={{ width: CARD_W, height: CARD_H, borderRadius: 10, background: grayscale ? "#000" : bg, display: "flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${grayscale ? "#555" : acc + "40"}`, overflow: "hidden", flexShrink: 0 }}>
+                    {card.svg
+                      ? <div style={{ lineHeight: 0, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }} dangerouslySetInnerHTML={{ __html: card.svg.replace(/<svg/, `<svg width="${CARD_W - 10}" height="${CARD_H - 10}"`) }} />
+                      : <span style={{ fontSize: 30, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }}>{card.emoji}</span>
+                    }
+                  </div>
+                  {/* Label */}
+                  <div style={{ fontSize: 9, fontWeight: 800, color: "#1A0840", textAlign: "center", maxWidth: CARD_W + 4, lineHeight: 1.2, wordBreak: "break-word" }}>{card.label}</div>
+                  {/* Checkbox */}
+                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${grayscale ? "#333" : acc}`, background: "transparent", flexShrink: 0 }} />
+                </div>
+              ))}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {r.cards.map((card, ci) => (
-              <div key={ci} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, pageBreakInside: "avoid" }}>
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: acc, color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900 }}>{ci + 1}</div>
-                <div style={{ width: 72, height: 80, borderRadius: 16, background: grayscale ? "#000000" : bg, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${acc}30`, position: "relative", overflow: "hidden" }}>
-                  {card.svg
-                    ? <div style={{ lineHeight: 0, filter: !grayscale ? "none" : "grayscale(1) brightness(3)" }} dangerouslySetInnerHTML={{ __html: card.svg.replace(/<svg/, '<svg width="54" height="54"') }} />
-                    : <span style={{ fontSize: 32, filter: grayscale ? "grayscale(1) brightness(3)" : "none" }}>{card.emoji}</span>
-                  }
-                </div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: "#1A0840", textAlign: "center", maxWidth: 72, lineHeight: 1.2, wordBreak: "break-word" }}>{card.label}</div>
-                <div style={{ width: 22, height: 22, borderRadius: 6, border: `2.5px solid ${acc}`, background: "transparent" }} />
-              </div>
-            ))}
-          </div>
+          {/* Cut line between strips */}
+          {ri < routines.length - 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "4mm 0", color: "#AAA", fontSize: 9, fontWeight: 700, userSelect: "none" }}>
+              <div style={{ flex: 1, borderTop: "1.5px dashed #CCC" }} />
+              <span>✂</span>
+              <div style={{ flex: 1, borderTop: "1.5px dashed #CCC" }} />
+            </div>
+          )}
         </div>
       ))}
+      <div style={{ marginTop: "6mm", fontSize: 7, color: "#CCC", textAlign: "center" }}>Lavet med Ugeplan-appen</div>
     </div>
   );
 }
@@ -309,7 +330,9 @@ export function RoutinePrintOverlay({ routines, theme, grayscale, onClose }) {
   const acc = theme.accent;
   const [selected, setSelected] = useState(routines.map(r => r.id));
   const [bw, setBw] = useState(grayscale);
+  useEffect(() => { setBw(grayscale); }, [grayscale]);
   const [title, setTitle] = useState("");
+  const [landscape, setLandscape] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
   const toggle = (id) => setSelected(prev => prev.includes(id) ? (prev.length > 1 ? prev.filter(x => x !== id) : prev) : [...prev, id]);
   const selectedRoutines = routines.filter(r => selected.includes(r.id));
@@ -317,14 +340,23 @@ export function RoutinePrintOverlay({ routines, theme, grayscale, onClose }) {
   const doPrint = () => {
     setIsPrinting(true);
     const printEl = document.getElementById("routine-print-root");
+    const styleEl = document.getElementById("routine-page-style") || document.createElement("style");
+    styleEl.id = "routine-page-style";
+    styleEl.textContent = `@media print { @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 0; } }`;
+    document.head.appendChild(styleEl);
     if (printEl) printEl.style.display = "block";
-    setTimeout(() => { window.print(); if (printEl) printEl.style.display = "none"; setIsPrinting(false); }, 120);
+    setTimeout(() => {
+      window.print();
+      if (printEl) printEl.style.display = "none";
+      styleEl.remove();
+      setIsPrinting(false);
+    }, 120);
   };
 
   return (
     <>
       <div id="routine-print-root" style={{ display: "none" }}>
-        <PrintRoutineLayout routines={selectedRoutines} theme={theme} grayscale={bw} title={title} />
+        <PrintRoutineLayout routines={selectedRoutines} theme={theme} grayscale={bw} title={title} landscape={landscape} />
       </div>
       <div style={{ position: "fixed", inset: 0, zIndex: 700, background: "#F2EEF8", display: "flex", flexDirection: "column", fontFamily: "'Nunito', sans-serif" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 12px", background: "#FFFFFF", boxShadow: "0 1px 0 rgba(0,0,0,0.07)" }}>
@@ -355,6 +387,14 @@ export function RoutinePrintOverlay({ routines, theme, grayscale, onClose }) {
           </div>
         </div>
         <div style={{ padding: "14px 16px", background: "#FFFFFF", borderBottom: "1px solid rgba(0,0,0,0.07)", display: "flex", gap: 10 }}>
+          {[{ val: true, label: "Vandret", sub: "A4 297×210" }, { val: false, label: "Lodret", sub: "A4 210×297" }].map(o => (
+            <button key={String(o.val)} onClick={() => setLandscape(o.val)} style={{ flex: 1, padding: "10px 6px", borderRadius: 12, background: landscape === o.val ? acc : "#F2EEF8", color: landscape === o.val ? "#FFF" : "#1A0840", border: `2px solid ${landscape === o.val ? acc : "transparent"}`, cursor: "pointer", fontWeight: 800, fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontFamily: "'Nunito', sans-serif", boxShadow: landscape === o.val ? `0 3px 10px ${acc}40` : "none" }}>
+              <span>{o.label}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.75 }}>{o.sub}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ padding: "14px 16px", background: "#FFFFFF", borderBottom: "1px solid rgba(0,0,0,0.07)", display: "flex", gap: 10 }}>
           {[{val:false,label:"Farver",icon:"theme"},{val:true,label:"Sort/hvid",icon:"week"}].map(opt => (
             <button key={String(opt.val)} onClick={() => setBw(opt.val)} style={{ flex: 1, padding: "10px 6px", borderRadius: 12, background: bw === opt.val ? (opt.val ? "#000000" : acc) : "#F2EEF8", color: bw === opt.val ? "#FFF" : "#1A0840", border: `2px solid ${bw === opt.val ? (opt.val ? "#000000" : acc) : "transparent"}`, cursor: "pointer", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "'Nunito', sans-serif" }}>
               <Icon name={opt.icon} size={16} color={bw === opt.val ? "#FFF" : acc} />{opt.label}
@@ -366,10 +406,20 @@ export function RoutinePrintOverlay({ routines, theme, grayscale, onClose }) {
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Overskrift (valgfri)…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 14, color: "#1A0840", fontFamily: "'Nunito', sans-serif", fontWeight: 600, padding: "8px 0" }} />
           </div>
         </div>
-        <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-          <div style={{ background: "#FFFFFF", borderRadius: 12, overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.10)", transform: "scale(0.85)", transformOrigin: "top center" }}>
-            <PrintRoutineLayout routines={selectedRoutines} theme={theme} grayscale={bw} title={title} />
-          </div>
+        <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", justifyContent: "center" }}>
+          {(() => {
+            const PW = (landscape ? 297 : 210) * 3.7795;
+            const PH = (landscape ? 210 : 297) * 3.7795;
+            const availW = Math.min(window.innerWidth - 32, 420);
+            const scale = availW / PW;
+            return (
+              <div style={{ width: availW, height: PH * scale, flexShrink: 0, boxShadow: "0 6px 28px rgba(0,0,0,0.14)", borderRadius: 6, overflow: "hidden" }}>
+                <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: PW, height: PH }}>
+                  <PrintRoutineLayout routines={selectedRoutines} theme={theme} grayscale={bw} title={title} landscape={landscape} />
+                </div>
+              </div>
+            );
+          })()}
         </div>
         <div style={{ padding: "12px 18px 28px", background: "#FFFFFF", boxShadow: "0 -1px 0 rgba(0,0,0,0.07)" }}>
           <button onClick={doPrint} disabled={isPrinting} style={{ width: "100%", padding: "16px 0", background: isPrinting ? "#DDD" : acc, color: isPrinting ? "#AAA" : "#FFFFFF", border: "none", borderRadius: 16, fontSize: 16, fontWeight: 900, cursor: isPrinting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: isPrinting ? "none" : `0 4px 16px ${acc}55`, fontFamily: "'Nunito', sans-serif" }}>

@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from './Icon';
+import GrayscaleEmoji from './GrayscaleEmoji';
 import { CARD_BG, CARD_BG_DONE, CARD_BG_GRAY } from '../constants/themes';
 
 export default function PictoCard({ card, small, dragging, grayscale, accent, scleraUrl, showLabel, onToggle, onRemove, onEdit, onDragStart, onDragEnd }) {
@@ -14,17 +15,18 @@ export default function PictoCard({ card, small, dragging, grayscale, accent, sc
   return (
     <div draggable onDragStart={onDragStart} onDragEnd={onDragEnd} style={{
       position: "relative", width: W, flexShrink: 0,
-      cursor: "grab", userSelect: "none",
-      opacity: dragging ? 0.2 : 1,
-      transform: dragging ? "scale(0.88) rotate(-3deg)" : "scale(1)",
-      transition: "opacity 0.15s, transform 0.15s",
+      cursor: dragging ? "grabbing" : "grab", userSelect: "none",
+      opacity: dragging ? 0.5 : 1,
+      transform: dragging ? "scale(0.92) rotate(-4deg)" : "scale(1)",
+      filter: dragging ? "drop-shadow(0 8px 16px rgba(0,0,0,0.25))" : "none",
+      transition: "opacity 0.12s, transform 0.12s, filter 0.12s",
       display: "flex", flexDirection: "column", alignItems: "center", gap: small ? 4 : 6,
     }}>
       <div onClick={onToggle} style={{
         width: W, height: H, background: cardBg, borderRadius: R,
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: onToggle ? "pointer" : "default", position: "relative",
-        border: "none",
+        border: "none", overflow: "hidden",
         boxSizing: "border-box",
       }}>
         {!card.done && !grayscale && (
@@ -32,10 +34,14 @@ export default function PictoCard({ card, small, dragging, grayscale, accent, sc
         )}
         {effectiveScleraUrl
           ? <img src={effectiveScleraUrl} alt={card.label} style={{ width: Math.round(H * 0.88), height: Math.round(H * 0.88), objectFit: "contain" }} />
-          : card.svg
-            ? <div style={{ filter: card.done ? "grayscale(1) opacity(0.5)" : grayscale ? "grayscale(1) brightness(3)" : "none", lineHeight: 0 }}
-                dangerouslySetInnerHTML={{ __html: card.svg.replace(/<svg/, `<svg width="${Math.round(H * 0.7)}" height="${Math.round(H * 0.7)}"`) }} />
-            : <span style={{ fontSize: emojiSz, lineHeight: 1, filter: card.done ? "grayscale(1) opacity(0.5)" : grayscale ? "grayscale(1) brightness(3)" : "none" }}>{card.emoji}</span>
+          : card.imageUrl
+            ? <img src={card.imageUrl} alt={card.label} style={{ width: Math.round(H * 0.88), height: Math.round(H * 0.88), objectFit: "cover", borderRadius: Math.round(R * 0.5), filter: card.done ? "grayscale(1) opacity(0.5)" : grayscale ? "grayscale(1) contrast(1.1)" : "none" }} />
+            : card.svg
+              ? <div style={{ filter: card.done ? "grayscale(1) opacity(0.5)" : grayscale ? "grayscale(1) brightness(3)" : "none", lineHeight: 0 }}
+                  dangerouslySetInnerHTML={{ __html: card.svg.replace(/<svg/, `<svg width="${Math.round(H * 0.7)}" height="${Math.round(H * 0.7)}"`) }} />
+              : (grayscale && !card.done)
+                  ? <GrayscaleEmoji emoji={card.emoji} size={emojiSz + 4} />
+                  : <span style={{ fontSize: emojiSz, lineHeight: 1, filter: card.done ? "grayscale(1) opacity(0.5)" : "none" }}>{card.emoji}</span>
         }
         {card.done && (
           <div style={{
@@ -62,8 +68,38 @@ export default function PictoCard({ card, small, dragging, grayscale, accent, sc
         )}
       </div>
 
-      {onRemove && <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, borderRadius: "50%", background: "#C41830", border: "2px solid #FFFFFF", color: "#FFFFFF", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, zIndex: 10 }}><Icon name="close" size={12} color="#FFFFFF" /></button>}
-      {onEdit && <button onClick={e => { e.stopPropagation(); onEdit(); }} style={{ position: "absolute", top: -8, left: -8, width: 22, height: 22, borderRadius: "50%", background: "#4A18A0", border: "2px solid #FFFFFF", color: "#FFFFFF", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, zIndex: 10 }}><Icon name="edit" size={11} color="#FFFFFF" /></button>}
+      {onRemove && (
+        <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{
+          position: "absolute", top: -10, right: -10,
+          width: 26, height: 26, borderRadius: "50%",
+          background: "#D32F2F", border: "2.5px solid #FFFFFF",
+          color: "#FFFFFF", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 2px 8px rgba(211,47,47,0.5)",
+          zIndex: 10, transition: "transform 0.12s, box-shadow 0.12s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.18)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(211,47,47,0.65)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(211,47,47,0.5)"; }}
+        >
+          <Icon name="close" size={14} color="#FFFFFF" />
+        </button>
+      )}
+      {onEdit && (
+        <button onClick={e => { e.stopPropagation(); onEdit(); }} style={{
+          position: "absolute", top: -10, left: -10,
+          width: 26, height: 26, borderRadius: "50%",
+          background: "#5C35B0", border: "2.5px solid #FFFFFF",
+          color: "#FFFFFF", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 2px 8px rgba(92,53,176,0.5)",
+          zIndex: 10, transition: "transform 0.12s, box-shadow 0.12s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.18)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(92,53,176,0.65)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(92,53,176,0.5)"; }}
+        >
+          <Icon name="edit" size={13} color="#FFFFFF" />
+        </button>
+      )}
       {showLabel && (
         <span style={{ fontSize: small ? 8 : 10, fontWeight: 800, color: card.done ? "#9A9090" : "#1A1410", fontFamily: "'Nunito', sans-serif", textAlign: "center", lineHeight: 1.2, maxWidth: W + 8, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
           {card.label}
